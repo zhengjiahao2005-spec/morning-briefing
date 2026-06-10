@@ -1,0 +1,25 @@
+﻿# 晨间简报 - GitHub Actions 定时推送
+# 每个工作日 UTC 1:30 (北京时间 9:30) 执行
+name: Morning Briefing
+
+on:
+  schedule:
+    - cron: "30 1 * * 1-5"  # 周一至周五 9:30 CST
+  workflow_dispatch:         # 手动触发
+
+jobs:
+  briefing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run Morning Briefing
+        run: python briefing.py
