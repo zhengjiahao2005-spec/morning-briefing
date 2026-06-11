@@ -1,4 +1,4 @@
-"""晨间简报 - GitHub Actions 云版本"""
+﻿"""晨间简报 - GitHub Actions 云版本"""
 import json, urllib.request, urllib.parse, xml.etree.ElementTree as ET
 from datetime import datetime
 
