@@ -1,4 +1,4 @@
-﻿"""晨间简报 - GitHub Actions 云版本"""
+﻿"""晨间简报 - GitHub Actions 云版本 v3"""
 import json, urllib.request, urllib.parse, xml.etree.ElementTree as ET
 from datetime import datetime
 
@@ -7,7 +7,7 @@ CITY = "Guangzhou"
 
 def send_feishu(title, content):
     text = f"{title}\n\n{content}"
-    body = json.dumps({"msg_type": "text", "content": {"text": text}}).encode("utf-8")
+    body = json.dumps({"msg_type": "text", "content": {"text": text}}).encode()
     req = urllib.request.Request(FEISHU_HOOK, data=body, method="POST",
         headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=10) as resp:
@@ -33,64 +33,45 @@ def get_weather():
         print(f"[天气] {e}")
         return ["🌡 天气暂不可用"]
 
+def fetch_rss(url, max_items, label):
+    """通用 RSS 抓取"""
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            tree = ET.fromstring(resp.read().decode("utf-8"))
+        items = []
+        for item in tree.iter("item"):
+            title = (item.find("title").text or "").strip()
+            if title and len(title) > 3:
+                items.append(title)
+            if len(items) >= max_items:
+                break
+        return items
+    except Exception as e:
+        print(f"[{label}] {e}")
+        return []
+
 def get_36kr():
-    try:
-        req = urllib.request.Request("https://36kr.com/feed",
-            headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            tree = ET.fromstring(resp.read().decode("utf-8"))
-        items = []
-        for item in tree.iter("item"):
-            title = item.find("title").text or ""
-            if title:
-                items.append(title)
-            if len(items) >= 8:
-                break
-        return items
-    except Exception as e:
-        print(f"[36kr] {e}")
-        return []
+    return fetch_rss("https://36kr.com/feed", 8, "36kr")
 
-def get_weibo():
-    urls = [
-        "https://tenapi.cn/v2/weibohot",
-        "https://api.vvhan.com/api/hotlist/wbHot",
-        "https://api.uomg.com/api/weibo.hots",
-    ]
-    for url in urls:
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=8) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-            items = []
-            for item in data.get("data", [])[:8]:
-                name = item.get("name", "") or item.get("title", "") or item.get("word", "")
-                hot = item.get("hot", "") or str(item.get("hotnum", ""))
-                if name:
-                    items.append(f"{name}  🔥{hot}" if hot else name)
-            if items:
-                return items
-        except Exception:
-            continue
-    return []
+def get_hn():
+    """Hacker News - 国外科技前沿"""
+    return fetch_rss("https://hnrss.org/frontpage?count=6", 6, "HN")
 
-def get_sspai():
-    try:
-        req = urllib.request.Request("https://sspai.com/feed",
-            headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            tree = ET.fromstring(resp.read().decode("utf-8"))
-        items = []
-        for item in tree.iter("item"):
-            title = item.find("title").text or ""
-            if title:
-                items.append(title)
-            if len(items) >= 5:
-                break
-        return items
-    except Exception as e:
-        print(f"[少数派] {e}")
-        return []
+def get_bbc():
+    """BBC World News"""
+    items = fetch_rss("https://feeds.bbci.co.uk/news/world/rss.xml", 6, "BBC")
+    # translate or prefix emoji
+    return items
+
+def get_wallstreetcn():
+    """华尔街见闻 - 财经快讯"""
+    return fetch_rss("https://wallstreetcn.com/rss", 6, "华尔街见闻")
+
+def get_thepaper():
+    """澎湃新闻 - 要闻"""
+    items = fetch_rss("https://www.thepaper.cn/rss_www.xml", 6, "澎湃")
+    return items
 
 def main():
     now = datetime.now()
@@ -98,40 +79,54 @@ def main():
     wd = weekdays[now.weekday()]
     is_weekend = now.weekday() >= 5
 
-    print(f"正在生成 {now:%Y-%m-%d} {wd} 简报...")
+    print(f"[{now:%Y-%m-%d %H:%M}] 生成中...")
 
     weather = get_weather()
     kr36 = get_36kr()
-    weibo = get_weibo()
-    sspai = get_sspai()
+    hn = get_hn()
+    bbc = get_bbc()
+    wscn = get_wallstreetcn()
+    paper = get_thepaper()
 
     L = []
-    L.append("=" * 40)
+    L.append("=" * 44)
     L.append(f"  ☀️  晨 间 简 报")
     L.append(f"  {now:%Y年%m月%d日} {wd}")
-    L.append("=" * 40)
+    L.append("=" * 44)
     L.append("")
 
-    L.append("--- 🌤 今日天气 ---")
+    L.append("── 🌤 今日天气 ──")
     L.extend(weather)
     L.append("")
 
-    if weibo:
-        L.append("--- 🔥 微博热搜 ---")
-        for i, w in enumerate(weibo, 1):
-            L.append(f"  {i}. {w}")
+    if wscn:
+        L.append(f"── 💰 华尔街见闻 · 财经 ({len(wscn)}条) ──")
+        for i, s in enumerate(wscn, 1):
+            L.append(f"  {i}. {s}")
         L.append("")
 
     if kr36:
-        L.append("--- 📰 36氪快讯 ---")
+        L.append(f"── 📰 36氪 · 科技商业 ({len(kr36)}条) ──")
         for i, k in enumerate(kr36, 1):
             L.append(f"  {i}. {k}")
         L.append("")
 
-    if sspai:
-        L.append("--- 💻 少数派 ---")
-        for i, s in enumerate(sspai, 1):
-            L.append(f"  {i}. {s}")
+    if paper:
+        L.append(f"── 📋 澎湃新闻 · 要闻 ({len(paper)}条) ──")
+        for i, p in enumerate(paper, 1):
+            L.append(f"  {i}. {p}")
+        L.append("")
+
+    if hn:
+        L.append(f"── 💻 Hacker News · 科技前沿 ({len(hn)}条) ──")
+        for i, h in enumerate(hn, 1):
+            L.append(f"  {i}. {h}")
+        L.append("")
+
+    if bbc:
+        L.append(f"── 🌍 BBC World News ({len(bbc)}条) ──")
+        for i, b in enumerate(bbc, 1):
+            L.append(f"  {i}. {b}")
         L.append("")
 
     if is_weekend:
@@ -141,7 +136,7 @@ def main():
     L.append("")
     L.append("💡 每日习惯：专注 · 起身活动 · 8杯水 💧")
     L.append("")
-    L.append("-" * 40)
+    L.append("─" * 44)
     L.append("Have a great day! 🎯")
 
     report = "\n".join(L)
